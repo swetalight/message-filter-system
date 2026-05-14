@@ -13,12 +13,10 @@ import faust
 import os
 import time
 import shelve
-import json
 import re
-import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Set, Dict
+from typing import Optional, Set
 
 # =========================== МОДЕЛИ ДАННЫХ ===========================
 
@@ -48,6 +46,7 @@ class Message:
         data['timestamp'] = datetime.fromisoformat(data['timestamp'])
         return cls(**data)
 
+
 @dataclass
 class BlockEvent:
     user_id: str
@@ -67,6 +66,7 @@ class BlockEvent:
     def from_json(cls, data: dict):
         data['timestamp'] = datetime.fromisoformat(data['timestamp'])
         return cls(**data)
+
 
 # =========================== ПЕРСИСТЕНТНОЕ ХРАНИЛИЩЕ ===========================
 
@@ -117,6 +117,7 @@ class ShelveStorage:
             words.discard(word.lower().strip())
             db['banned'] = words
 
+
 # =========================== ЦЕНЗУРА ===========================
 
 def censor_text(text: str, banned_words: Set[str]) -> str:
@@ -130,16 +131,18 @@ def censor_text(text: str, banned_words: Set[str]) -> str:
         result = re.sub(pattern, '*' * len(w), result, flags=re.IGNORECASE)
     return result
 
+
 # =========================== FAUST ПРИЛОЖЕНИЕ ===========================
 
-# Задержка для ожидания готовности Kafka
+# Небольшая задержка, чтобы Kafka успела подняться (опционально)
 time.sleep(5)
 
-broker_list = os.getenv('KAFKA_BROKERS', 'kafka1:9093,kafka2:9092,kafka3:9092').split(',')
+# ВАЖНО: используем строку с протоколом kafka://
+brokers = os.getenv('KAFKA_BROKERS', 'kafka://kafka1:9093,kafka://kafka2:9092,kafka://kafka3:9092')
 
 app = faust.App(
     'message-filter-app',
-    broker=broker_list,
+    broker=brokers,
     consumer_auto_offset_reset='earliest',
     value_serializer='json',
 )
@@ -157,6 +160,7 @@ banned_storage = ShelveStorage('/data/banned_storage')
 # Предзагрузка (необязательно)
 blocked_storage.get('blocked', {})
 banned_storage.get('banned', set())
+
 
 # -------------------------------------------------------------------
 # Агент обработки сообщений
@@ -184,6 +188,7 @@ async def process_messages(stream):
         await filtered_topic.send(value=message.to_json())
         print(f"[✓] Отправлено {message.from_user} → {message.to_user}")
 
+
 # -------------------------------------------------------------------
 # Агент обработки событий блокировки
 # -------------------------------------------------------------------
@@ -197,6 +202,7 @@ async def process_blocks(stream):
         else:
             blocked_storage.update_blocked(ev.user_id, ev.blocked_user, block=False)
             print(f"[🔓] {ev.user_id} разблокировал {ev.blocked_user}")
+
 
 # -------------------------------------------------------------------
 # Агент обновления списка запрещённых слов
@@ -212,6 +218,7 @@ async def process_banned(stream):
         elif action == 'remove':
             banned_storage.remove_banned_word(word)
             print(f"[✅] Разрешено слово: {word}")
+
 
 # -------------------------------------------------------------------
 # Точка входа (для прямого запуска python app.py)
