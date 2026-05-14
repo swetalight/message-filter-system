@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+env/
+.env
+
+# Данные приложения (персистентные файлы shelve)
+data/
+*.db
+*.dir
+*.bak
+
+# Docker
+*.log
+*.pid
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

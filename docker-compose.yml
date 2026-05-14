@@ -1,0 +1,141 @@
+
+
+services:
+  kafka1:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: kafka-node1
+    hostname: kafka1
+    ports:
+      - "9092:9092"
+    networks:
+      - kafka-net
+    environment:
+      KAFKA_NODE_ID: 1
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka1:9094,2@kafka2:9094,3@kafka3:9094'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9093,CONTROLLER://0.0.0.0:9094,EXTERNAL://0.0.0.0:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka1:9093,EXTERNAL://localhost:9092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_LOG_DIRS: '/var/lib/kafka/data'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+    volumes:
+      - kafka1_data:/var/lib/kafka/data
+
+  kafka2:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: kafka-node2
+    hostname: kafka2
+    ports:
+      - "9093:9093"
+    networks:
+      - kafka-net
+    environment:
+      KAFKA_NODE_ID: 2
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka1:9094,2@kafka2:9094,3@kafka3:9094'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9094,EXTERNAL://0.0.0.0:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka2:9092,EXTERNAL://localhost:9093'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_LOG_DIRS: '/var/lib/kafka/data'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+    volumes:
+      - kafka2_data:/var/lib/kafka/data
+
+  kafka3:
+    image: confluentinc/cp-kafka:7.7.0
+    container_name: kafka-node3
+    hostname: kafka3
+    ports:
+      - "9095:9095"
+    networks:
+      - kafka-net
+    environment:
+      KAFKA_NODE_ID: 3
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka1:9094,2@kafka2:9094,3@kafka3:9094'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9094,EXTERNAL://0.0.0.0:9095'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka3:9092,EXTERNAL://localhost:9095'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_LOG_DIRS: '/var/lib/kafka/data'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+    volumes:
+      - kafka3_data:/var/lib/kafka/data
+
+  kafbat-ui:
+    image: ghcr.io/kafbat/kafka-ui:latest
+    container_name: kafbat-ui
+    ports:
+      - "8080:8080"
+    networks:
+      - kafka-net
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "kraft-cluster"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka1:9093,kafka2:9092,kafka3:9092"
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: "PLAINTEXT"
+      KAFKA_CLUSTERS_0_PROPERTIES_CLIENT_DNS_LOOKUP: "use_all_dns_ips"
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+
+  processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: message-processor
+    platform: linux/amd64   # ← важно для Apple Silicon!
+    networks:
+      - kafka-net
+    environment:
+      KAFKA_BROKERS: "kafka1:9093,kafka2:9092,kafka3:9092"
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+    volumes:
+      - ./app.py:/app/app.py
+      - ./data:/data
+    restart: on-failure
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: test-client
+    platform: linux/amd64   # ← важно для Apple Silicon!
+    networks:
+      - kafka-net
+    environment:
+      KAFKA_BROKERS: "kafka1:9093,kafka2:9092,kafka3:9092"
+    depends_on:
+      - processor
+    volumes:
+      - ./tests/test_data.py:/app/test_data.py
+    restart: "no"
+
+networks:
+  kafka-net:
+    driver: bridge
+
+volumes:
+  kafka1_data:
+  kafka2_data:
+  kafka3_data:
